@@ -2038,7 +2038,7 @@ int seccomp_protect_hostname(void) {
 static int seccomp_restrict_sxid(scmp_filter_ctx seccomp, mode_t m) {
         /* Checks the mode_t parameter of the following system calls:
          *
-         *       → chmod() + fchmod() + fchmodat()
+         *       → chmod() + fchmod() + fchmodat() + fchmodat2()
          *       → open() + creat() + openat()
          *       → mkdir() + mkdirat()
          *       → mknod() + mknodat()
@@ -2046,6 +2046,7 @@ static int seccomp_restrict_sxid(scmp_filter_ctx seccomp, mode_t m) {
          * Returns error if *everything* failed, and 0 otherwise.
          */
         int r;
+        int k;
         bool any = false;
 
         r = seccomp_rule_add_exact(
@@ -2078,6 +2079,35 @@ static int seccomp_restrict_sxid(scmp_filter_ctx seccomp, mode_t m) {
                         SCMP_A2(SCMP_CMP_MASKED_EQ, m, m));
         if (r < 0)
                 log_debug_errno(r, "Failed to add filter for fchmodat: %m");
+        else
+                any = true;
+
+        k = seccomp_syscall_resolve_name("fchmodat2");
+        if (k != __NR_SCMP_ERROR) {
+#if defined(__SNR_fchmodat2)
+                r = seccomp_rule_add_exact(
+                                seccomp,
+                                SCMP_ACT_ERRNO(EPERM),
+                                SCMP_SYS(fchmodat2),
+                                1,
+                                SCMP_A2(SCMP_CMP_MASKED_EQ, m, m));
+#else
+                r = -EOPNOTSUPP;
+                /* SCMP_SYS(fchmodat2) is undefined. The libseccomp docs claim this cannot happen. */
+                assert(k == __NR_SCMP_ERROR);
+#endif
+        } else {
+                /* It looks like this libseccomp does not know about fchmodat2().
+                 * Pretend the fchmodat2() system call is not supported at all,
+                 * regardless of the kernel version. */
+                r = seccomp_rule_add_exact(
+                                seccomp,
+                                SCMP_ACT_ERRNO(ENOSYS),
+                                __NR_fchmodat2,
+                                0);
+        }
+        if (r < 0)
+                log_debug_errno(r, "Failed to add filter for fchmodat2: %m");
         else
                 any = true;
 
