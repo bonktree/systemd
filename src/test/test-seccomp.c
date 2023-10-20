@@ -1007,20 +1007,20 @@ static int real_open(const char *path, int flags, mode_t mode) {
 #endif
 }
 
-static int try_fchmodat2(int dirfd, const char *path, int flags, mode_t mode) {
+static int try_fchmodat2(int dirfd, const char *path, mode_t mode, int flags) {
         /* glibc does not provide a direct wrapper for fchmodat2(). Let's hence define our own wrapper for
          * testing purposes that calls the real syscall, on architectures and in environments where
          * SYS_fchmodat2 is defined. Otherwise, let's just fall back to the glibc fchmodat() call. */
 
 #if defined __NR_fchmodat2 && __NR_fchmodat2 >= 0
         int r;
-        r = (int) syscall(__NR_fchmodat2, dirfd, path, flags, mode);
+        r = (int) syscall(__NR_fchmodat2, dirfd, path, mode, flags);
         /* The syscall might still be unsupported by kernel or libseccomp. */
         if (r < 0 && errno == ENOSYS)
-                return fchmodat(dirfd, path, flags, mode);
+                return fchmodat(dirfd, path, mode, flags);
         return r;
 #else
-        return fchmodat(dirfd, path, flags, mode);
+        return fchmodat(dirfd, path, mode, flags);
 #endif
 }
 
